@@ -10,14 +10,16 @@ export interface Source {
   group: Group;
   lang: Lang;
   feed: string;
-  /** The article page is an anti-bot shell from a datacenter IP; read it through r.jina.ai. */
-  jina?: boolean;
+  /** Only the RSS lead exists: the article page is an SPA shell behind a WAF from every IP tried
+   *  (VPS, residential Mac, cloud runner), and r.jina.ai renders the page's sidebar longread —
+   *  a DIFFERENT article — in place of the news (measured 2026-10-12). `--article` refuses. */
+  leadOnly?: boolean;
   /** The article page is behind a Cloudflare challenge (Jina blocked too); only the feed body exists. */
   feedBodyOnly?: boolean;
 }
 
 export const SOURCES: Source[] = [
-  { slug: "tass", group: "ru-state", lang: "ru", feed: "https://tass.ru/rss/v2.xml", jina: true },
+  { slug: "tass", group: "ru-state", lang: "ru", feed: "https://tass.ru/rss/v2.xml", leadOnly: true },
   { slug: "ria", group: "ru-state", lang: "ru", feed: "https://ria.ru/export/rss2/archive/index.xml" },
   { slug: "rg", group: "ru-state", lang: "ru", feed: "https://rg.ru/xml/index.xml" },
   { slug: "meduza", group: "ru-exile", lang: "ru", feed: "https://meduza.io/rss/all" },

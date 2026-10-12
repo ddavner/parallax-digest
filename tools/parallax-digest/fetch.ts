@@ -4,7 +4,8 @@
 //       pulls every feed of sources.ts, keeps the window, writes one compact JSON
 //       (titles + leads, no bodies) and prints a per-source table to stderr.
 //   npx tsx tools/parallax-digest/fetch.ts --article <url> [--jina]   (or --body <url>: the feed's own content:encoded)
-//       prints the article text (≤ ARTICLE_CHARS) for one chosen link.
+//       prints the article text (≤ ARTICLE_CHARS) for one chosen link. A `leadOnly` source
+//       (tass) refuses: its page is unreachable and Jina returns the wrong article.
 //
 // Zero dependencies beyond tsx so a bare checkout in a cloud runner can run it.
 
@@ -36,8 +37,13 @@ export interface DigestInput {
   items: DigestItem[];
 }
 
+// r.jina.ai answers 403 to a browser User-Agent (measured 2026-10-12 from a Mac and from the cloud
+// runner; curl's own UA got 200 on the same URL in the same minute), so the reader gets a plain one.
+const JINA_UA = "parallax-digest/1.0 (+https://github.com/ddavner/parallax-digest)";
+
 async function get(url: string, timeoutMs: number): Promise<string> {
-  const res = await fetch(url, { headers: { "user-agent": UA, accept: "*/*" }, signal: AbortSignal.timeout(timeoutMs), redirect: "follow" });
+  const ua = url.startsWith("https://r.jina.ai/") ? JINA_UA : UA;
+  const res = await fetch(url, { headers: { "user-agent": ua, accept: "*/*" }, signal: AbortSignal.timeout(timeoutMs), redirect: "follow" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.text();
 }
@@ -74,9 +80,11 @@ async function articleText(url: string, viaJina: boolean): Promise<string> {
     return (i >= 0 ? md.slice(i + 17) : md).trim().slice(0, ARTICLE_CHARS);
   }
   const html = await get(url, ARTICLE_TIMEOUT_MS);
-  // Prefer the <article> element when the page has one; else the whole body.
-  const art = html.match(/<article[\s\S]*?<\/article>/i)?.[0] ?? html.match(/<body[\s\S]*?<\/body>/i)?.[0] ?? html;
-  const text = htmlToText(art);
+  // Prefer the LONGEST <article> element: a page lists teasers as <article> too, and the first
+  // one on meduza.io was a related-story card (measured 2026-10-12, 352 chars). Else the body.
+  const articles = [...html.matchAll(/<article[\s\S]*?<\/article>/gi)].map((m) => htmlToText(m[0]));
+  const longest = articles.sort((a, b) => b.length - a.length)[0];
+  const text = longest && longest.length >= 600 ? longest : htmlToText(html.match(/<body[\s\S]*?<\/body>/i)?.[0] ?? html);
   if (/just a moment|checking your browser|attention required/i.test(text.slice(0, 1200))) throw new Error("anti-bot interstitial");
   return text.slice(0, ARTICLE_CHARS);
 }
@@ -107,7 +115,10 @@ async function main() {
   const article = arg("--article");
   if (article) {
     const src = SOURCES.find((s) => article.startsWith(new URL(s.feed).origin.replace("rss.", "www.")) || article.includes(s.slug));
-    const viaJina = process.argv.includes("--jina") || !!src?.jina;
+    if (src?.leadOnly && !process.argv.includes("--jina")) {
+      throw new Error(`${src.slug}: only the RSS lead exists for this source (SPA behind a WAF; r.jina.ai returns a different article) — use the JSON lead`);
+    }
+    const viaJina = process.argv.includes("--jina");
     process.stdout.write(await articleText(article, viaJina) + "\n");
     return;
   }
