@@ -1,0 +1,52 @@
+# Hourly fold of every Parallax feed into a rolling 36h archive.
+# Lives in the public mirror as .github/workflows/accumulate.yml (this copy is the source;
+# edit here, sync there). The archive is the single file items.json on branch `data`, rewritten
+# as ONE commit each run (force-push), so the branch never grows a history.
+# Why: tass/ria/rg/unian feeds keep only their last 100 items (3-5 hours); read once a day they
+# showed state media for the last few hours only (issue 3, 2026-10-12).
+name: accumulate
+
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: accumulate
+  cancel-in-progress: false
+
+jobs:
+  fold:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Fetch the current archive
+        run: |
+          if git fetch -q --depth=1 origin data 2>/dev/null; then
+            git show origin/data:items.json > items.json || rm -f items.json
+          fi
+          ls -l items.json 2>/dev/null || echo "no archive yet - starting a new one"
+
+      - name: Fold one fetch into it
+        run: npx -y tsx@4 tools/parallax-digest/fetch.ts --accumulate items.json
+
+      - name: Publish the archive as a one-commit branch
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir out && cp items.json out/ && cd out
+          git init -q -b data
+          git config user.name "parallax-digest bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add items.json
+          git commit -q -m "archive $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q --force "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data

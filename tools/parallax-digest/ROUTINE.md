@@ -8,8 +8,16 @@
 ## 1. Сбор (детерминированно, скриптом)
 
 ```bash
-npx -y tsx@4 tools/parallax-digest/fetch.ts --hours 24 --out /tmp/digest-input.json
+git fetch -q origin data && git show origin/data:items.json > /tmp/archive.json
+npx -y tsx@4 tools/parallax-digest/fetch.ts --hours 24 --archive /tmp/archive.json --out /tmp/digest-input.json
 ```
+
+Первая строка достаёт архив: ленты ТАСС, РИА, РГ и УНИАН держат только последние 100
+материалов (3–5 часов), поэтому раз в час GitHub Actions складывает все фиды в ветку `data`.
+Скрипт объединяет архив со свежим сбором; колонка `live` — что отдал фид сейчас, `day` — что
+есть за сутки. Если первая строка упала или скрипт пишет `missing` / `STALE` — продолжай, но в
+подвале выпуска одной фразой скажи, что ленты госСМИ и УНИАН покрыты только последними
+часами, и не пиши про госСМИ «промолчали» о событиях раньше этих часов.
 
 Скрипт печатает таблицу по источникам и пишет JSON (`items[]`: `src`, `group`, `lang`,
 `t` заголовок, `link`, `at`, `lead`, `body`). Групп пять: три стороны — `ru-state`,
