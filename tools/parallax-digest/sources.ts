@@ -1,9 +1,17 @@
-// Feeds of the Parallax daily digest. Probed from the VPS 2026-10-11/12
-// (docs/superpowers/specs/2026-10-12-parallax-edition-design.md has the table).
+// Feeds of the Parallax daily digest. Core groups probed from the VPS 2026-10-11/12
+// (docs/superpowers/specs/2026-10-12-parallax-edition-design.md has the table); the two
+// outside groups (il, world) probed from a residential IL line 2026-10-12.
 // RT and Sputnik are excluded by decision (EU sanctions), not by probe.
 
-export type Group = "ru-state" | "ru-exile" | "ua";
-export type Lang = "ru" | "uk" | "en";
+/** The three sides of the conflict. Only these gate a run: fewer than 6 of them up = no issue. */
+export type CoreGroup = "ru-state" | "ru-exile" | "ua";
+/** Outside views, shown as a strip under an event and never judged with a verdict. */
+export type SideGroup = "il" | "world";
+export type Group = CoreGroup | SideGroup;
+export type Lang = "ru" | "uk" | "en" | "he";
+
+export const CORE_GROUPS: readonly CoreGroup[] = ["ru-state", "ru-exile", "ua"];
+export const isCore = (g: Group): g is CoreGroup => (CORE_GROUPS as readonly string[]).includes(g);
 
 export interface Source {
   slug: string;
@@ -30,10 +38,29 @@ export const SOURCES: Source[] = [
   { slug: "ukrinform", group: "ua", lang: "uk", feed: "https://www.ukrinform.ua/rss/block-lastnews" },
   { slug: "zn", group: "ua", lang: "uk", feed: "https://zn.ua/rss/full.rss" },
   { slug: "kyivindependent", group: "ua", lang: "en", feed: "https://kyivindependent.com/news-archive/rss/" },
+
+  // Israel: the same feed URLs NewsLI ingests (supabase/functions/swift-endpoint/fetch-news.ts).
+  { slug: "vesti", group: "il", lang: "ru", feed: "https://www.vesty.co.il/3rdparty/mobile/rss/vesty/13148/" },
+  { slug: "cursor", group: "il", lang: "ru", feed: "https://cursorinfo.co.il/feed/" },
+  { slug: "ynet", group: "il", lang: "he", feed: "https://www.ynet.co.il/Integration/StoryRss2.xml" },
+  { slug: "jpost", group: "il", lang: "en", feed: "https://www.jpost.com/rss/rssfeedsfrontpage.aspx" },
+  { slug: "timesofisrael", group: "il", lang: "en", feed: "https://www.timesofisrael.com/feed/" },
+
+  // World. Al Jazeera is blocked by Israeli ISPs (DNS answers with a foreign certificate), so it
+  // was never probed from here; the cloud runner is outside Israel. A failed side feed only
+  // thins the strip, it never stops an issue.
+  { slug: "bbc", group: "world", lang: "en", feed: "https://feeds.bbci.co.uk/news/world/rss.xml" },
+  { slug: "guardian", group: "world", lang: "en", feed: "https://www.theguardian.com/world/rss" },
+  { slug: "nyt", group: "world", lang: "en", feed: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml" },
+  { slug: "dw", group: "world", lang: "en", feed: "https://rss.dw.com/rdf/rss-en-world" },
+  { slug: "france24", group: "world", lang: "en", feed: "https://www.france24.com/en/rss" },
+  { slug: "aljazeera", group: "world", lang: "en", feed: "https://www.aljazeera.com/xml/rss/all.xml" },
 ];
 
 export const GROUP_LABEL: Record<Group, { ru: string; uk: string }> = {
   "ru-state": { ru: "госСМИ РФ", uk: "держЗМІ РФ" },
   "ru-exile": { ru: "эмигрантские СМИ РФ", uk: "емігрантські ЗМІ РФ" },
   ua: { ru: "украинские СМИ", uk: "українські ЗМІ" },
+  il: { ru: "Израиль", uk: "Ізраїль" },
+  world: { ru: "мир", uk: "світ" },
 };

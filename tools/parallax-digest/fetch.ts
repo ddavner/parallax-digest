@@ -10,7 +10,7 @@
 // Zero dependencies beyond tsx so a bare checkout in a cloud runner can run it.
 
 import { writeFileSync } from "node:fs";
-import { SOURCES, type Source } from "./sources.ts";
+import { isCore, SOURCES, type Source } from "./sources.ts";
 import { htmlToText, inWindow, parseRss, type RssItem } from "./rss.ts";
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36";
@@ -33,7 +33,7 @@ export interface DigestInput {
   generated_at: string;
   since: string;
   hours: number;
-  sources: { slug: string; ok: boolean; total: number; kept: number; error?: string }[];
+  sources: { slug: string; group: Source["group"]; ok: boolean; total: number; kept: number; error?: string }[];
   items: DigestItem[];
 }
 
@@ -52,9 +52,9 @@ async function fetchFeed(s: Source, since: string): Promise<{ row: DigestInput["
   try {
     const all = parseRss(await get(s.feed, FEED_TIMEOUT_MS));
     const kept = inWindow(all, since);
-    return { row: { slug: s.slug, ok: true, total: all.length, kept: kept.length }, items: kept };
+    return { row: { slug: s.slug, group: s.group, ok: true, total: all.length, kept: kept.length }, items: kept };
   } catch (e) {
-    return { row: { slug: s.slug, ok: false, total: 0, kept: 0, error: (e as Error).message }, items: [] };
+    return { row: { slug: s.slug, group: s.group, ok: false, total: 0, kept: 0, error: (e as Error).message }, items: [] };
   }
 }
 
@@ -130,7 +130,8 @@ async function main() {
   console.error(`${w("source", 18)}${w("ok", 4)}${w("total", 7)}kept  error`);
   for (const r of input.sources) console.error(`${w(r.slug, 18)}${w(r.ok ? "y" : "n", 4)}${w(String(r.total), 7)}${w(String(r.kept), 6)}${r.error ?? ""}`);
   console.error(`items=${input.items.length} window=${hours}h → ${out} (${(JSON.stringify(input).length / 1024).toFixed(0)} KB)`);
-  if (input.sources.filter((r) => r.ok).length < 6) process.exit(1);
+  // Only the three sides gate an issue; Israel and world are a strip that may come back thin.
+  if (input.sources.filter((r) => r.ok && isCore(r.group)).length < 6) process.exit(1);
 }
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop()!)) main().catch((e) => { console.error(e); process.exit(1); });
